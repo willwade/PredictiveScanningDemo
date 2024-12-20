@@ -5,6 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PPM Language Model Demo</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .suggestions {
+      margin: 10px 0;
+      min-height: 30px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .suggestion {
+      display: inline-block;
+      padding: 5px 10px;
+      background-color: #e0e0e0;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.2s;
+      border: 1px solid #ccc;
+    }
+    .suggestion:hover {
+      background-color: #d0d0d0;
+    }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -40,6 +66,10 @@
           Enable predictive scan for first loop
         </label>
         <label>
+          <input type="checkbox" id="autocorrect-enabled" checked>
+          Enable Auto-correct
+        </label>
+        <label>
           Speed:
           <input id="scan-speed" type="range" min="200" max="2500" step="100" value="500">
           <span id="speed-value">500ms</span>
@@ -56,11 +86,17 @@
       </div>
     </div>
 
-    <div id="predictions">
-      <div class="prediction"></div>
-      <div class="prediction"></div>
-      <div class="prediction"></div>
-      <div class="prediction"></div>
+    <div id="predictions-container">
+      <div id="predictions">
+        <div class="prediction"></div>
+        <div class="prediction"></div>
+        <div class="prediction"></div>
+        <div class="prediction"></div>
+      </div>
+      <div id="corrections">
+        <div class="correction"></div>
+        <div class="correction"></div>
+      </div>
     </div>
 
     <div id="letter-grid"></div>

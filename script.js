@@ -8,11 +8,27 @@ async function initializeModel() {
     const trainingText = await response.text();
     console.log('Training text loaded:', trainingText.slice(0, 100) + '...');
     
-    // Train vocabulary and initialize PPM model
+    // Add common English words to vocabulary
+    const commonWords = [
+      'THE', 'BE', 'TO', 'OF', 'AND', 'A', 'IN', 'THAT', 'HAVE', 'I',
+      'IT', 'FOR', 'NOT', 'ON', 'WITH', 'HE', 'AS', 'YOU', 'DO', 'AT',
+      'THIS', 'BUT', 'HIS', 'BY', 'FROM', 'THEY', 'WE', 'SAY', 'HER', 'SHE',
+      'OR', 'AN', 'WILL', 'MY', 'ONE', 'ALL', 'WOULD', 'THERE', 'THEIR', 'WHAT',
+      'SO', 'UP', 'OUT', 'IF', 'ABOUT', 'WHO', 'GET', 'WHICH', 'GO', 'ME',
+      'HELLO', 'WORLD', 'YES', 'NO', 'PLEASE', 'THANK', 'YOU', 'GOOD', 'BAD',
+      'HELP', 'WANT', 'NEED', 'CAN', 'SOME', 'TIME', 'NOW', 'LIKE', 'JUST', 'KNOW'
+    ];
+    
+    // Train vocabulary with common words first
+    commonWords.forEach(word => window.vocab.addWord(word));
+    
+    // Then train on the training text
     window.vocab.trainOnText(trainingText);
+    
     console.log('Vocabulary after training:', 
       'Symbols:', window.vocab.symbols_,
-      'Words:', Array.from(window.vocab.words));
+      'Words:', Array.from(window.vocab.words).slice(0, 20), // Show first 20 words
+      'Total words:', window.vocab.words.size);
     
     // Initialize PPM model after training
     const ppm = new window.PPMLanguageModel(window.vocab, maxOrder);
@@ -26,10 +42,6 @@ async function initializeModel() {
         ppm.addSymbolAndUpdate(context, symbolIndex);
       }
     });
-    
-    // Debug: Print the trie
-    console.log('PPM Model Trie after training:');
-    ppm.printToConsole();
     
     return { ppm, context };
   } catch (error) {
@@ -49,9 +61,9 @@ const scanModeSelect = document.getElementById("scan-mode");
 const predictionCheckbox = document.getElementById("prediction-enabled");
 const scanSpeedSlider = document.getElementById("scan-speed");
 const scanAnimationSelect = document.getElementById("scan-animation");
-const predictionElements = document.querySelectorAll(".prediction");
 const toggleControlsBtn = document.getElementById('toggle-controls');
 const controlsDiv = document.getElementById('controls');
+const scanStartBtn = document.getElementById('scan-start-btn');
 
 // Remove scan button styles
 const style = document.createElement('style');
@@ -75,6 +87,8 @@ let context = null;
 let currentRowIndex = -1;
 let scanInterval = null;
 let currentHighlightedElement = null;
+let currentWord = '';
+let autocorrectEnabled = true;
 
 // Keyboard layouts
 const layouts = {
@@ -137,13 +151,59 @@ function updatePredictions() {
   const predictions = getTopPredictions(context, 6);
   console.log('Updating predictions display:', predictions);
   
+  // Get current word and corrections
+  const currentWord = getCurrentWord();
+  let corrections = [];
+  if (currentWord.length >= 3 && autocorrectEnabled) {
+    corrections = window.vocab.getAutocorrections(currentWord);
+    console.log('Current corrections:', corrections);
+  }
+  
   // Update word predictions
-  predictionElements.forEach((el, index) => {
-    const word = predictions.words[index] || '';
-    el.textContent = word;
-    el.classList.toggle('word-prediction', true);
-    el.style.display = word ? 'block' : 'none'; // Hide empty predictions
+  const predictionsContainer = document.getElementById('predictions');
+  const predictionElements = predictionsContainer.querySelectorAll('.prediction');
+  predictions.words.forEach((word, index) => {
+    if (predictionElements[index]) {
+      predictionElements[index].textContent = word;
+      predictionElements[index].style.display = 'block';
+      predictionElements[index].onclick = () => selectWord(word);
+    }
   });
+  
+  // Hide unused prediction elements
+  for (let i = predictions.words.length; i < predictionElements.length; i++) {
+    predictionElements[i].style.display = 'none';
+  }
+  
+  // Update corrections - get top 2 corrections that aren't already in predictions
+  const correctionsContainer = document.getElementById('corrections');
+  if (correctionsContainer) {
+    const correctionElements = correctionsContainer.querySelectorAll('.correction');
+    
+    // Filter out corrections that are already in predictions
+    const filteredCorrections = corrections
+      .filter(word => !predictions.words.includes(word))
+      .slice(0, 2); // Only take top 2
+    
+    console.log('Filtered corrections to display:', filteredCorrections);
+    
+    // Update correction elements
+    filteredCorrections.forEach((word, index) => {
+      if (correctionElements[index]) {
+        correctionElements[index].textContent = word;
+        correctionElements[index].style.display = 'block';
+        correctionElements[index].onclick = () => selectWord(word);
+      }
+    });
+    
+    // Hide unused correction elements
+    for (let i = filteredCorrections.length; i < correctionElements.length; i++) {
+      correctionElements[i].style.display = 'none';
+    }
+
+    // Show/hide corrections container based on whether we have corrections
+    correctionsContainer.style.display = filteredCorrections.length > 0 ? 'flex' : 'none';
+  }
 }
 
 // Add this function to update probability highlighting
@@ -171,12 +231,25 @@ function updateProbabilityHighlights() {
 // Handle selection
 function selectCharacter(char) {
   if (char) {
+    if (char === ' ') {
+      // When space is selected, add the current word to vocabulary
+      if (currentWord) {
+        vocab.addWord(currentWord);
+        currentWord = '';
+      }
+    } else {
+      currentWord = (currentWord || '') + char;
+    }
+
     message += char;
-    window.vocab.updateCurrentWord(char);
-    ppm.addSymbolAndUpdate(context, window.vocab.symbols_.indexOf(char));
     messageElement.textContent = message;
+    vocab.updateCurrentWord(char);
+    ppm.addSymbolAndUpdate(context, vocab.getSymbolIndex(char));
+    
+    // Update UI
     updatePredictions();
     updateProbabilityHighlights();
+    updateSuggestions();
     
     // Restart scanning with new predictions
     if (scanning) {
@@ -197,15 +270,19 @@ function selectWord(word) {
     
     // Add the selected word
     message += word + ' ';
+    messageElement.textContent = message;
     
     // Update PPM model with each character
     const chars = (word + ' ').split('');
     chars.forEach(char => {
-      ppm.addSymbolAndUpdate(context, window.vocab.symbols_.indexOf(char));
+      ppm.addSymbolAndUpdate(context, vocab.getSymbolIndex(char));
     });
-    
-    messageElement.textContent = message;
+
+    // Reset current word and update UI
+    currentWord = '';
     updatePredictions();
+    updateProbabilityHighlights();
+    updateSuggestions();
   }
 }
 
@@ -253,9 +330,15 @@ function stopScanning() {
   scanning = false;
   scanIndex = 0;
   currentRowIndex = -1;
+  
+  // Clear all highlights
   const letterElements = Array.from(document.querySelectorAll(".letter"));
   letterElements.forEach((el) => el.classList.remove("highlight", "pulse", "line", "row-highlight"));
-  predictionElements.forEach((el) => el.classList.remove("highlight", "pulse", "line"));
+  
+  // Clear prediction highlights
+  document.querySelectorAll('.prediction, .correction').forEach((el) => {
+    el.classList.remove("highlight", "pulse", "line");
+  });
 }
 
 // Scanning
@@ -425,6 +508,107 @@ function handleScanSelection() {
   }
 }
 
+function updateSuggestions() {
+  console.log('Updating suggestions for word:', currentWord);
+  if (!autocorrectEnabled || !currentWord) {
+    console.log('Autocorrect disabled or no current word');
+    return;
+  }
+
+  // First try word predictions
+  const predictions = window.vocab.getWordPredictions(currentWord);
+  console.log('Word predictions:', predictions);
+
+  // Always get autocorrections for words 3 or more characters
+  let suggestions = [];
+  if (currentWord.length >= 3) {
+    const corrections = window.vocab.getAutocorrections(currentWord);
+    console.log('Autocorrection suggestions:', corrections);
+    suggestions = corrections;
+    
+    // Add predictions only if they're not already in corrections
+    predictions.forEach(word => {
+      if (!suggestions.includes(word)) {
+        suggestions.push(word);
+      }
+    });
+  } else {
+    suggestions = predictions;
+  }
+}
+
+function applySuggestion(word) {
+    // Remove the current incomplete word
+    const words = message.split(' ');
+    words.pop();
+    message = words.join(' ');
+    if (message.length > 0) message += ' ';
+    
+    // Add the suggested word
+    message += word + ' ';
+    messageElement.textContent = message;
+    
+    // Update PPM model with each character
+    const chars = (word + ' ').split('');
+    chars.forEach(char => {
+      ppm.addSymbolAndUpdate(context, vocab.getSymbolIndex(char));
+    });
+
+    // Reset current word and update UI
+    currentWord = '';
+    updatePredictions();
+    updateProbabilityHighlights();
+    updateSuggestions();
+}
+
+function handleInput(letter) {
+    if (!message) return;
+
+    if (vocabulary.wordBreakSymbols.has(letter)) {
+        currentWord = '';
+    } else {
+        currentWord = (currentWord || '') + letter;
+    }
+
+    message.textContent += letter;
+    updateSuggestions();
+    updatePredictions();
+}
+
+// Update the clear function
+function clearMessage() {
+    message = "";
+    messageElement.textContent = message;
+    currentWord = '';
+    context = ppm.createContext(); // Reset context
+    updatePredictions();
+    updateProbabilityHighlights();
+    updateSuggestions();
+}
+
+// Update the undo function
+function undoLastCharacter() {
+    if (!message) return;
+    
+    message = message.slice(0, -1);
+    messageElement.textContent = message;
+    
+    // Update current word
+    if (currentWord) {
+      currentWord = currentWord.slice(0, -1);
+    }
+    
+    // If we removed a space, get the last word
+    if (message.length > 0 && message[message.length - 1] !== ' ') {
+      const words = message.split(' ');
+      currentWord = words[words.length - 1];
+    }
+    
+    updatePredictions();
+    updateProbabilityHighlights();
+    updateSuggestions();
+}
+
 // Initialize app
 async function initApp() {
   const model = await initializeModel();
@@ -438,19 +622,18 @@ async function initApp() {
 
     // Set up all event listeners
     speakBtn.addEventListener("click", speakMessage);
-    clearBtn.addEventListener("click", () => {
-      message = "";
-      messageElement.textContent = message;
-      ppm.createContext(); // Reset context
-      updatePredictions();
-    });
+    clearBtn.addEventListener("click", clearMessage);
+    undoBtn.addEventListener("click", undoLastCharacter);
     
-    undoBtn.addEventListener("click", () => {
-      message = message.slice(0, -1);
-      messageElement.textContent = message;
-      // Optionally rebuild context
-    });
-    
+    // Add autocorrect toggle listener if element exists
+    const autocorrectToggle = document.getElementById('autocorrect-enabled');
+    if (autocorrectToggle) {
+      autocorrectToggle.addEventListener('change', (e) => {
+        autocorrectEnabled = e.target.checked;
+        updatePredictions(); // This will also update corrections
+      });
+    }
+
     gridElement.addEventListener("click", (e) => {
       if (e.target.classList.contains("letter")) {
         selectCharacter(e.target.dataset.char);
@@ -459,15 +642,6 @@ async function initApp() {
     
     scanAnimationSelect.addEventListener("change", (e) => {
       scanAnimation = e.target.value;
-    });
-
-    // Add click handlers for word predictions
-    predictionElements.forEach(el => {
-      el.addEventListener('click', () => {
-        if (el.textContent) {
-          selectWord(el.textContent);
-        }
-      });
     });
 
     // Add keyboard event listener
@@ -487,7 +661,6 @@ async function initApp() {
     // Add toggle controls event listener
     toggleControlsBtn.addEventListener('click', () => {
       controlsDiv.classList.toggle('hidden');
-      // Store preference
       localStorage.setItem('controlsHidden', controlsDiv.classList.contains('hidden'));
     });
 
@@ -531,12 +704,49 @@ async function initApp() {
       }
     });
 
+    // Add scan start button listener
+    if (scanStartBtn) {
+      scanStartBtn.addEventListener('click', () => {
+        if (scanning) {
+          stopScanning();
+        } else {
+          startScanning();
+        }
+      });
+    }
+
     // Start scanning automatically
     startScanning();
   } else {
     console.error('Failed to initialize model');
   }
 }
+
+// Add styles for suggestions
+const suggestionStyles = document.createElement('style');
+suggestionStyles.textContent = `
+    .suggestions {
+        margin: 10px 0;
+        min-height: 30px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .suggestion {
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #e0e0e0;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.2s;
+    }
+    .suggestion:hover {
+        background-color: #d0d0d0;
+    }
+`;
+document.head.appendChild(suggestionStyles);
 
 // Start the app
 initApp();
