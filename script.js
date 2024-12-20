@@ -50,17 +50,31 @@ const predictionCheckbox = document.getElementById("prediction-enabled");
 const scanSpeedSlider = document.getElementById("scan-speed");
 const scanAnimationSelect = document.getElementById("scan-animation");
 const predictionElements = document.querySelectorAll(".prediction");
+const toggleControlsBtn = document.getElementById('toggle-controls');
+const controlsDiv = document.getElementById('controls');
 
+// Remove scan button styles
+const style = document.createElement('style');
+style.textContent = `
+  #controls {
+    padding: 8px 16px;
+  }
+`;
+document.head.appendChild(style);
+
+// State variables
 let message = "";
 let scanIndex = 0;
 let scanning = false;
 let scanMode = "linear";
 let usePredictions = true;
 let scanSpeed = 500;
-let scanAnimation = "normal";
+let scanAnimation = "highlight";
 let ppm = null;
 let context = null;
-let currentRowIndex = -1; // For row-column scanning
+let currentRowIndex = -1;
+let scanInterval = null;
+let currentHighlightedElement = null;
 
 // Keyboard layouts
 const layouts = {
@@ -107,16 +121,10 @@ function getTopPredictions(context, topN = 6) {
   // Get word predictions
   const currentWord = getCurrentWord();
   const wordPredictions = window.vocab.getWordPredictions(currentWord);
-  console.log('Predictions:', {
-    currentWord,
-    letterPredictions,
-    wordPredictions,
-    vocabWords: Array.from(window.vocab.words)
-  });
 
   return {
     letters: letterPredictions,
-    words: wordPredictions.slice(0, 4)
+    words: wordPredictions.slice(0, 4) // Get top 4 word predictions
   };
 }
 
@@ -126,8 +134,32 @@ function updatePredictions() {
   
   // Update word predictions
   predictionElements.forEach((el, index) => {
-    el.textContent = predictions.words[index] || '';
+    const word = predictions.words[index] || '';
+    el.textContent = word;
     el.classList.toggle('word-prediction', true);
+    el.style.display = word ? 'block' : 'none'; // Hide empty predictions
+  });
+}
+
+// Add this function to update probability highlighting
+function updateProbabilityHighlights() {
+  const letterElements = Array.from(document.querySelectorAll(".letter"));
+  // Clear existing probability classes
+  letterElements.forEach(el => {
+    for (let i = 0; i < 6; i++) {
+      el.classList.remove(`prob-${i}`);
+    }
+  });
+
+  // Get predictions
+  const predictions = getTopPredictions(context, 6);
+  
+  // Apply new probability classes
+  predictions.letters.forEach((letter, index) => {
+    const letterEl = letterElements.find(el => el.dataset.char === letter);
+    if (letterEl) {
+      letterEl.classList.add(`prob-${index}`);
+    }
   });
 }
 
@@ -135,10 +167,17 @@ function updatePredictions() {
 function selectCharacter(char) {
   if (char) {
     message += char;
-    window.vocab.updateCurrentWord(char); // Update word tracking
+    window.vocab.updateCurrentWord(char);
     ppm.addSymbolAndUpdate(context, window.vocab.symbols_.indexOf(char));
     messageElement.textContent = message;
     updatePredictions();
+    updateProbabilityHighlights();
+    
+    // Restart scanning with new predictions
+    if (scanning) {
+      stopScanning();
+      startScanning();
+    }
   }
 }
 
@@ -168,6 +207,7 @@ function selectWord(word) {
 // Event listeners for controls
 layoutSelect.addEventListener("change", (e) => {
   initGrid(e.target.value);
+  updateProbabilityHighlights();
   if (scanning) {
     stopScanning();
     startScanning();
@@ -201,56 +241,80 @@ scanSpeedSlider.addEventListener("input", (e) => {
 
 // Function to stop scanning
 function stopScanning() {
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
   scanning = false;
   scanIndex = 0;
   currentRowIndex = -1;
   const letterElements = Array.from(document.querySelectorAll(".letter"));
-  letterElements.forEach((el) => el.classList.remove("scanning", "pulse", "row-highlight"));
-  predictionElements.forEach((el) => el.classList.remove("scanning", "pulse"));
+  letterElements.forEach((el) => el.classList.remove("highlight", "pulse", "line", "row-highlight"));
+  predictionElements.forEach((el) => el.classList.remove("highlight", "pulse", "line"));
 }
 
 // Scanning
 function startScanning() {
-  stopScanning();
-  scanning = true;
-  const letterElements = Array.from(document.querySelectorAll(".letter"));
-  let predictions = getTopPredictions(context, 6);
-  let predictionScanningComplete = !usePredictions;
+  console.log('Starting scanning...');
+  if (scanning) {
+    stopScanning();
+    return;
+  }
 
-  const scanInterval = setInterval(() => {
+  stopScanning(); // Clear any existing interval
+  scanning = true;
+
+  // Set CSS variable for line animation duration
+  document.documentElement.style.setProperty('--scan-speed', `${scanSpeed}ms`);
+
+  const letterElements = Array.from(document.querySelectorAll(".letter"));
+  console.log('Found letter elements:', letterElements.length);
+  
+  let predictions = getTopPredictions(context, 6);
+  let firstLoopComplete = false;
+  let predictiveScanningDone = !usePredictions;
+  let predictedLetterElements = [];
+  let loopCount = 0;
+
+  // If using predictions, prepare the predicted letters order
+  if (usePredictions) {
+    predictedLetterElements = predictions.letters
+      .map(letter => letterElements.find(el => el.dataset.char === letter))
+      .filter(el => el);
+    console.log('Predicted letters:', predictedLetterElements.length);
+  }
+
+  scanIndex = 0;
+  currentRowIndex = -1;
+
+  console.log('Starting scan interval with speed:', scanSpeed);
+  scanInterval = setInterval(() => {
     if (!scanning) {
       clearInterval(scanInterval);
       return;
     }
 
     // Clear previous highlights
-    letterElements.forEach((el) => el.classList.remove("scanning", "pulse", "row-highlight"));
-    predictionElements.forEach((el) => el.classList.remove("scanning", "pulse"));
-
-    // First handle predictions if enabled
-    if (usePredictions && !predictionScanningComplete) {
-      // First scan word predictions
-      if (scanIndex < predictionElements.length) {
-        const el = predictionElements[scanIndex];
-        if (el.textContent) {
-          el.classList.add(scanAnimation === "pulse" ? "pulse" : "scanning");
-        }
-      } else {
-        // Then scan predicted letters
-        const letterIndex = scanIndex - predictionElements.length;
-        if (letterIndex < predictions.letters.length) {
-          const letter = predictions.letters[letterIndex];
-          const letterEl = letterElements.find(el => el.dataset.char === letter);
-          if (letterEl) {
-            letterEl.classList.add(scanAnimation === "pulse" ? "pulse" : "scanning");
-          }
-        } else {
-          predictionScanningComplete = true;
-          scanIndex = 0;
-          currentRowIndex = -1;
-        }
+    letterElements.forEach((el) => {
+      el.classList.remove("highlight", "pulse", "line", "row-highlight");
+      if (scanAnimation === 'line') {
+        el.style.animation = 'none';
+        el.offsetHeight;
+        el.style.animation = null;
       }
-      scanIndex = (scanIndex + 1) % (predictionElements.length + predictions.letters.length);
+    });
+
+    // First loop with predictions if enabled
+    if (usePredictions && !predictiveScanningDone) {
+      if (scanIndex < predictedLetterElements.length) {
+        const letterEl = predictedLetterElements[scanIndex];
+        letterEl.classList.add(scanAnimation);
+        scanIndex++;
+      } else {
+        predictiveScanningDone = true;
+        scanIndex = 0;
+        currentRowIndex = -1;
+      }
     } else {
       // Regular scanning modes
       if (scanMode === "row-column") {
@@ -269,6 +333,10 @@ function startScanning() {
           
           scanIndex = (scanIndex + 1) % numRows;
           if (scanIndex === 0) {
+            if (!firstLoopComplete) {
+              firstLoopComplete = true;
+              predictiveScanningDone = !usePredictions;
+            }
             currentRowIndex = 0;
           }
         } else {
@@ -278,9 +346,7 @@ function startScanning() {
           const columnIndex = scanIndex % numCols;
           
           if (startIndex + columnIndex < endIndex) {
-            letterElements[startIndex + columnIndex].classList.add(
-              scanAnimation === "pulse" ? "pulse" : "scanning"
-            );
+            letterElements[startIndex + columnIndex].classList.add(scanAnimation);
           }
           
           scanIndex = (scanIndex + 1) % numCols;
@@ -291,11 +357,20 @@ function startScanning() {
       } else {
         // Linear scanning
         if (scanIndex < letterElements.length) {
-          letterElements[scanIndex].classList.add(
-            scanAnimation === "pulse" ? "pulse" : "scanning"
-          );
+          letterElements[scanIndex].classList.add(scanAnimation);
         }
         scanIndex = (scanIndex + 1) % letterElements.length;
+        if (scanIndex === 0) {
+          if (!firstLoopComplete) {
+            firstLoopComplete = true;
+            predictiveScanningDone = !usePredictions;
+          }
+          loopCount++;
+          if (loopCount >= 3) {
+            stopScanning();
+            return;
+          }
+        }
       }
     }
   }, scanSpeed);
@@ -307,36 +382,37 @@ function speakMessage() {
   speechSynthesis.speak(utterance);
 }
 
-// Event listeners
-speakBtn.addEventListener("click", speakMessage);
-clearBtn.addEventListener("click", () => {
-  message = "";
-  messageElement.textContent = message;
-  ppm.createContext(); // Reset context
-  updatePredictions();
-});
-undoBtn.addEventListener("click", () => {
-  message = message.slice(0, -1);
-  messageElement.textContent = message;
-  // Optionally rebuild context
-});
-gridElement.addEventListener("click", (e) => {
-  if (e.target.classList.contains("letter")) {
-    selectCharacter(e.target.dataset.char);
-  }
-});
-scanAnimationSelect.addEventListener("change", (e) => {
-  scanAnimation = e.target.value;
-});
+// Add this function to handle selection during scanning
+function handleScanSelection() {
+  if (!scanning) return;
+  
+  const letterElements = Array.from(document.querySelectorAll(".letter"));
+  const highlightedLetter = letterElements.find(el => 
+    el.classList.contains("highlight") || 
+    el.classList.contains("pulse") || 
+    el.classList.contains("line") ||
+    el.classList.contains("row-highlight")
+  );
 
-// Add click handlers for word predictions
-predictionElements.forEach(el => {
-  el.addEventListener('click', () => {
-    if (el.textContent) {
-      selectWord(el.textContent);
+  if (highlightedLetter) {
+    if (scanMode === "row-column") {
+      if (currentRowIndex === -1) {
+        // If we're scanning rows, select the row
+        currentRowIndex = Math.floor([...letterElements].indexOf(highlightedLetter) / Math.ceil(letterElements.length / 6));
+        scanIndex = 0;
+      } else {
+        // If we're scanning within a row, select the letter
+        selectCharacter(highlightedLetter.dataset.char);
+        currentRowIndex = -1;
+        scanIndex = 0;
+      }
+    } else {
+      // For linear scanning, just select the letter
+      selectCharacter(highlightedLetter.dataset.char);
+      scanIndex = 0;
     }
-  });
-});
+  }
+}
 
 // Initialize app
 async function initApp() {
@@ -346,7 +422,105 @@ async function initApp() {
     context = model.context;
     initGrid(layoutSelect.value);
     updatePredictions();
+    updateProbabilityHighlights();
     document.getElementById('speed-value').textContent = scanSpeed + 'ms';
+
+    // Set up all event listeners
+    speakBtn.addEventListener("click", speakMessage);
+    clearBtn.addEventListener("click", () => {
+      message = "";
+      messageElement.textContent = message;
+      ppm.createContext(); // Reset context
+      updatePredictions();
+    });
+    
+    undoBtn.addEventListener("click", () => {
+      message = message.slice(0, -1);
+      messageElement.textContent = message;
+      // Optionally rebuild context
+    });
+    
+    gridElement.addEventListener("click", (e) => {
+      if (e.target.classList.contains("letter")) {
+        selectCharacter(e.target.dataset.char);
+      }
+    });
+    
+    scanAnimationSelect.addEventListener("change", (e) => {
+      scanAnimation = e.target.value;
+    });
+
+    // Add click handlers for word predictions
+    predictionElements.forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.textContent) {
+          selectWord(el.textContent);
+        }
+      });
+    });
+
+    // Add keyboard event listener
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault(); // Prevent page scrolling
+        if (scanning) {
+          handleScanSelection();
+        } else {
+          startScanning();
+        }
+      } else if (e.code === 'Escape') {
+        stopScanning();
+      }
+    });
+
+    // Add toggle controls event listener
+    toggleControlsBtn.addEventListener('click', () => {
+      controlsDiv.classList.toggle('hidden');
+      // Store preference
+      localStorage.setItem('controlsHidden', controlsDiv.classList.contains('hidden'));
+    });
+
+    // Load controls visibility preference
+    if (localStorage.getItem('controlsHidden') === 'true') {
+      controlsDiv.classList.add('hidden');
+    }
+
+    // Add control change listeners
+    layoutSelect.addEventListener("change", (e) => {
+      initGrid(e.target.value);
+      updateProbabilityHighlights();
+      if (scanning) {
+        stopScanning();
+        startScanning();
+      }
+    });
+
+    predictionCheckbox.addEventListener("change", (e) => {
+      usePredictions = e.target.checked;
+      if (scanning) {
+        stopScanning();
+        startScanning();
+      }
+    });
+
+    scanModeSelect.addEventListener("change", (e) => {
+      scanMode = e.target.value;
+      if (scanning) {
+        stopScanning();
+        startScanning();
+      }
+    });
+
+    scanSpeedSlider.addEventListener("input", (e) => {
+      scanSpeed = parseInt(e.target.value, 10);
+      document.getElementById('speed-value').textContent = scanSpeed + 'ms';
+      if (scanning) {
+        stopScanning();
+        startScanning();
+      }
+    });
+
+    // Start scanning automatically
     startScanning();
   } else {
     console.error('Failed to initialize model');

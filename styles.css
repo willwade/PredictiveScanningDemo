@@ -12,11 +12,11 @@ body {
   height: 100%;
 }
 
-#message-bar {
+#message-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: 15px;
   background: #f5f5f5;
   border-bottom: 1px solid #ddd;
 }
@@ -24,18 +24,111 @@ body {
 #message {
   flex-grow: 1;
   font-size: 1.5em;
-  padding: 0 10px;
+  padding: 10px;
+  min-height: 1.5em;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-right: 15px;
 }
 
-#controls button {
-  margin: 0 5px;
+#message-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+#message-buttons button {
+  width: 60px;
+  height: 60px;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+#message-buttons button:hover {
+  background: #45a049;
+}
+
+#controls-wrapper {
+  position: relative;
+  background: #e8f5e9;
+  border-bottom: 1px solid #ddd;
+}
+
+#toggle-controls {
+  position: absolute;
+  right: 15px;
+  top: -40px;
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+  font-size: 1.2em;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+#toggle-controls:hover {
+  background: #45a049;
+}
+
+#controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 15px;
+  transition: max-height 0.3s ease-in-out;
+  overflow: hidden;
+  max-height: 200px; /* Adjust based on your content */
+}
+
+#controls.hidden {
+  max-height: 0;
+  padding: 0 15px;
+}
+
+#controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+
+#controls select {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  min-width: 100px;
+}
+
+#scan-speed {
+  width: 150px;
 }
 
 #predictions {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  margin: 15px;
   justify-content: center;
+  min-height: 50px;
 }
 
 .letter.scanning {
@@ -55,16 +148,20 @@ body {
   min-width: 80px;
   text-align: center;
   background: #f5f5f5;
+  transition: all 0.2s ease;
+  display: none; /* Hidden by default */
 }
 
 .prediction:hover {
   background: #e0e0e0;
+  transform: scale(1.05);
 }
 
 .prediction.scanning,
-.prediction.wave {
-  background-color: #4CAF50;
+.prediction.pulse {
+  background: #4CAF50;
   color: white;
+  transform: scale(1.1);
 }
 
 .prediction.wave {
@@ -91,13 +188,24 @@ body {
   font-weight: bold;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
-.letter.scanning {
-  background: #4CAF50;
-  color: white;
+/* Probability gradient styles */
+.letter.prob-0 { background-color: rgba(76, 175, 80, 0.3); } /* Most likely */
+.letter.prob-1 { background-color: rgba(102, 187, 106, 0.3); }
+.letter.prob-2 { background-color: rgba(129, 199, 132, 0.3); }
+.letter.prob-3 { background-color: rgba(156, 204, 101, 0.3); }
+.letter.prob-4 { background-color: rgba(192, 202, 51, 0.3); }
+.letter.prob-5 { background-color: rgba(255, 213, 79, 0.3); } /* Least likely */
+
+/* Scanning styles */
+.letter.highlight {
+  background-color: #4CAF50 !important;
+  color: white !important;
   border-color: #45a049;
   transform: scale(1.1);
+  z-index: 1;
 }
 
 .letter.pulse {
@@ -106,43 +214,9 @@ body {
 
 /* Row highlighting for row-column scanning */
 .letter.row-highlight {
-  background: #81c784;
-  color: white;
+  background-color: rgba(76, 175, 80, 0.5) !important;
+  color: white !important;
   border-color: #4CAF50;
-}
-
-#controls {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding: 10px;
-}
-
-#controls label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-#controls select,
-#controls button {
-  padding: 5px 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
-}
-
-#controls button {
-  cursor: pointer;
-  background: #4CAF50;
-  color: white;
-  border: none;
-}
-
-#controls button:hover {
-  background: #45a049;
 }
 
 #keyboard-layout {
@@ -180,4 +254,58 @@ body {
 #speed-value {
   min-width: 50px;
   text-align: right;
+}
+
+/* Line animation styles */
+.letter.line {
+  position: relative;
+  overflow: hidden;
+}
+
+.letter.line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(76, 175, 80, 0.2) 50%,
+    transparent 100%
+  );
+  animation: lineAnimation var(--scan-speed) linear;
+  z-index: 2; /* Ensure line animation shows above probability colors */
+}
+
+@keyframes lineAnimation {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Add line animation for predictions */
+.prediction.line {
+  position: relative;
+  overflow: hidden;
+}
+
+.prediction.line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(76, 175, 80, 0.2) 50%,
+    transparent 100%
+  );
+  animation: lineAnimation var(--scan-speed) linear;
 }

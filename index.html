@@ -8,12 +8,18 @@
 </head>
 <body>
   <div id="app">
-    <div id="message-bar">
+    <div id="message-container">
       <div id="message"></div>
-      <div id="controls">
+      <div id="message-buttons">
         <button id="speak-btn">Speak</button>
         <button id="clear-btn">Clear</button>
         <button id="undo-btn">Undo</button>
+      </div>
+    </div>
+
+    <div id="controls-wrapper">
+      <button id="toggle-controls" aria-label="Toggle Options">⚙️</button>
+      <div id="controls">
         <label>
           Layout:
           <select id="keyboard-layout">
@@ -31,7 +37,7 @@
         </label>
         <label>
           <input type="checkbox" id="prediction-enabled" checked>
-          Use Predictions
+          Enable predictive scan for first loop
         </label>
         <label>
           Speed:
@@ -43,6 +49,7 @@
           <select id="scan-animation">
             <option value="highlight">Highlight</option>
             <option value="pulse">Pulse</option>
+            <option value="line">Line</option>
           </select>
         </label>
       </div>
