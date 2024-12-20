@@ -111,12 +111,17 @@ function getCurrentWord() {
 function getTopPredictions(context, topN = 6) {
   // Get letter predictions from PPM
   const probs = ppm.getProbs(context);
-  const letterPredictions = probs
-    .map((p, index) => ({ symbol: window.vocab.symbols_[index], prob: p }))
-    .filter((entry) => entry.prob > 0)
-    .sort((a, b) => b.prob - a.prob)
+  
+  // Convert probabilities to sorted array of {symbol, prob} pairs
+  const predictions = probs
+    .map((prob, index) => ({ symbol: window.vocab.symbols_[index], prob }))
+    .filter(entry => entry.prob > 0 && entry.symbol.match(/[A-Z ]/)) // Only include letters and space
+    .sort((a, b) => b.prob - a.prob);
+
+  // Get top N letter predictions
+  const letterPredictions = predictions
     .slice(0, topN)
-    .map((entry) => entry.symbol);
+    .map(entry => entry.symbol);
 
   // Get word predictions
   const currentWord = getCurrentWord();
@@ -124,7 +129,7 @@ function getTopPredictions(context, topN = 6) {
 
   return {
     letters: letterPredictions,
-    words: wordPredictions.slice(0, 4) // Get top 4 word predictions
+    words: wordPredictions.slice(0, 4)
   };
 }
 
@@ -261,15 +266,12 @@ function startScanning() {
     return;
   }
 
-  stopScanning(); // Clear any existing interval
+  stopScanning();
   scanning = true;
 
-  // Set CSS variable for line animation duration
   document.documentElement.style.setProperty('--scan-speed', `${scanSpeed}ms`);
 
   const letterElements = Array.from(document.querySelectorAll(".letter"));
-  console.log('Found letter elements:', letterElements.length);
-  
   let predictions = getTopPredictions(context, 6);
   let firstLoopComplete = false;
   let predictiveScanningDone = !usePredictions;
@@ -278,16 +280,25 @@ function startScanning() {
 
   // If using predictions, prepare the predicted letters order
   if (usePredictions) {
-    predictedLetterElements = predictions.letters
-      .map(letter => letterElements.find(el => el.dataset.char === letter))
-      .filter(el => el);
-    console.log('Predicted letters:', predictedLetterElements.length);
+    // Create a map of predicted letters for quick lookup
+    const predictionMap = new Map(
+      predictions.letters.map((letter, index) => [letter, index])
+    );
+    
+    // Sort letter elements by prediction probability
+    predictedLetterElements = letterElements
+      .filter(el => predictionMap.has(el.dataset.char))
+      .sort((a, b) => 
+        predictionMap.get(a.dataset.char) - predictionMap.get(b.dataset.char)
+      );
+
+    console.log('Predicted letters order:', 
+      predictedLetterElements.map(el => el.dataset.char).join(', '));
   }
 
   scanIndex = 0;
   currentRowIndex = -1;
 
-  console.log('Starting scan interval with speed:', scanSpeed);
   scanInterval = setInterval(() => {
     if (!scanning) {
       clearInterval(scanInterval);

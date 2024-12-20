@@ -54,7 +54,7 @@ class Vocabulary {
   constructor() {
     this.symbols_ = [];
     this.rootSymbol = 0;
-    this.wordBreakSymbols = new Set([' ', '.']); // Symbols that break words
+    this.wordBreakSymbols = new Set([' ', '.', ',', '?', '!', '\n']); // Add more word break symbols
     this.currentWord = ''; // Track current word being built
     this.words = new Set(); // Store unique words
   }
@@ -66,7 +66,6 @@ class Vocabulary {
   addSymbol(symbol) {
     if (!this.symbols_.includes(symbol)) {
       this.symbols_.push(symbol);
-      console.log('Added new symbol:', symbol, 'at index:', this.symbols_.length - 1);
       return this.symbols_.length - 1;
     }
     return this.symbols_.indexOf(symbol);
@@ -76,25 +75,34 @@ class Vocabulary {
     return this.symbols_.indexOf(symbol);
   }
 
+  // Clean word by removing punctuation and extra whitespace
+  cleanWord(word) {
+    return word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\n]/g, "")
+               .replace(/\s+/g, " ")
+               .trim()
+               .toUpperCase();
+  }
+
   // Add a word to the vocabulary
   addWord(word) {
-    if (word.trim()) {
-      const upperWord = word.toUpperCase();
-      this.words.add(upperWord);
-      console.log('Added word to vocabulary:', upperWord);
+    const cleanedWord = this.cleanWord(word);
+    if (cleanedWord && cleanedWord.length > 1) { // Only add words with 2+ characters
+      this.words.add(cleanedWord);
     }
   }
 
   // Get all words that start with a prefix
   getWordPredictions(prefix) {
-    prefix = prefix.toUpperCase();
-    console.log('Getting word predictions for prefix:', prefix);
-    console.log('Current vocabulary words:', Array.from(this.words));
-    const predictions = Array.from(this.words)
-      .filter(word => word.startsWith(prefix))
-      .sort((a, b) => a.length - b.length);
-    console.log('Word predictions:', predictions);
-    return predictions;
+    const cleanPrefix = this.cleanWord(prefix);
+    if (!cleanPrefix) return [];
+    
+    return Array.from(this.words)
+      .filter(word => word.startsWith(cleanPrefix))
+      .sort((a, b) => {
+        // Sort by length first, then alphabetically
+        if (a.length !== b.length) return a.length - b.length;
+        return a.localeCompare(b);
+      });
   }
 
   // Track word building as symbols are added
@@ -102,26 +110,25 @@ class Vocabulary {
     if (this.wordBreakSymbols.has(symbol)) {
       if (this.currentWord) {
         this.addWord(this.currentWord);
-        console.log('Word break detected. Added word:', this.currentWord);
         this.currentWord = '';
       }
     } else {
       this.currentWord += symbol;
-      console.log('Building word:', this.currentWord);
     }
   }
 
   // Train on a text string
   trainOnText(text) {
-    console.log('Training on text:', text.slice(0, 100) + '...');
+    // Split text into words and clean each word
+    const words = text.split(/[\s\n]+/);
+    words.forEach(word => this.addWord(word));
+
+    // Also train on individual characters
     const chars = text.split('');
     chars.forEach(char => {
-      this.addSymbol(char);
-      this.updateCurrentWord(char);
-    });
-    console.log('Training complete. Vocabulary:', {
-      symbols: this.symbols_,
-      words: Array.from(this.words)
+      if (char.match(/[A-Za-z\s]/)) { // Only add letters and spaces
+        this.addSymbol(char.toUpperCase());
+      }
     });
   }
 }

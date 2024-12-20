@@ -4,6 +4,9 @@ What time is it?
 I don't understand.
 Yes, please.
 No, thank you.
+Hello
+Goodbye 
+Will 
 I'm feeling tired.
 That's great news!
 Where are you going?
