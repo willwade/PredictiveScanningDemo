@@ -1,0 +1,183 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#message-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+#message {
+  flex-grow: 1;
+  font-size: 1.5em;
+  padding: 0 10px;
+}
+
+#controls button {
+  margin: 0 5px;
+}
+
+#predictions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.letter.scanning {
+  background: #c8e6c9; /* Normal highlight color */
+  transition: background 0.3s;
+}
+
+.letter.wave {
+  animation: waveEffect 1s ease-in-out;
+}
+
+.prediction {
+  padding: 10px 15px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  cursor: pointer;
+  min-width: 80px;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.prediction:hover {
+  background: #e0e0e0;
+}
+
+.prediction.scanning,
+.prediction.wave {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.prediction.wave {
+  animation: waveAnimation 0.5s infinite;
+}
+
+#letter-grid {
+  flex-grow: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 5px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  background: #f9f9f9;
+  font-size: 1.2em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.letter.scanning {
+  background: #4CAF50;
+  color: white;
+  border-color: #45a049;
+  transform: scale(1.1);
+}
+
+.letter.pulse {
+  animation: pulseAnimation 0.5s ease-in-out;
+}
+
+/* Row highlighting for row-column scanning */
+.letter.row-highlight {
+  background: #81c784;
+  color: white;
+  border-color: #4CAF50;
+}
+
+#controls {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px;
+}
+
+#controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+#controls select,
+#controls button {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+}
+
+#controls button {
+  cursor: pointer;
+  background: #4CAF50;
+  color: white;
+  border: none;
+}
+
+#controls button:hover {
+  background: #45a049;
+}
+
+#keyboard-layout {
+  min-width: 100px;
+}
+
+@keyframes waveEffect {
+  0% {
+    background: #c8e6c9;
+  }
+  50% {
+    background: #a5d6a7;
+  }
+  100% {
+    background: #c8e6c9;
+  }
+}
+
+@keyframes pulseAnimation {
+  0% {
+    transform: scale(1);
+    background: #f9f9f9;
+  }
+  50% {
+    transform: scale(1.1);
+    background: #4CAF50;
+    color: white;
+  }
+  100% {
+    transform: scale(1);
+    background: #f9f9f9;
+  }
+}
+
+#speed-value {
+  min-width: 50px;
+  text-align: right;
+}

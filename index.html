@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPM Language Model Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="message-bar">
+      <div id="message"></div>
+      <div id="controls">
+        <button id="speak-btn">Speak</button>
+        <button id="clear-btn">Clear</button>
+        <button id="undo-btn">Undo</button>
+        <label>
+          Layout:
+          <select id="keyboard-layout">
+            <option value="abc">A-Z</option>
+            <option value="qwerty">QWERTY</option>
+            <option value="frequency">Frequency</option>
+          </select>
+        </label>
+        <label>
+          Scan Mode:
+          <select id="scan-mode">
+            <option value="linear">Linear</option>
+            <option value="row-column">Row-Column</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" id="prediction-enabled" checked>
+          Use Predictions
+        </label>
+        <label>
+          Speed:
+          <input id="scan-speed" type="range" min="200" max="1000" step="100" value="500">
+          <span id="speed-value">500ms</span>
+        </label>
+        <label>
+          Animation:
+          <select id="scan-animation">
+            <option value="highlight">Highlight</option>
+            <option value="pulse">Pulse</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div id="predictions">
+      <div class="prediction"></div>
+      <div class="prediction"></div>
+      <div class="prediction"></div>
+      <div class="prediction"></div>
+    </div>
+
+    <div id="letter-grid"></div>
+  </div>
+
+  <script src="ppm_language_model.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
